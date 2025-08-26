@@ -59,7 +59,7 @@ const CSV_URL = "results.csv"; // 같은 저장소에 올린 CSV 경로 (예: re
         return teams.get(name);
       };
 
-      const PLAYERS = ["근근","깡","다루","디니","라로","로버트","미정","소금","소나","숑숑","승지","아르테","위나","지명","쿠몬","큰환","하늘"];
+      const PLAYERS = ["근근","깡","다루","다니","라로","로버트","미정","소금","소나","숑숑","승지","아르테","위나","지명","쿠몬","큰환","하늘"];
       PLAYERS.forEach(p=>ensure(p));
 
       const completed = matches.filter(m=>Number.isFinite(m.hs) && Number.isFinite(m.as));
@@ -69,8 +69,8 @@ const CSV_URL = "results.csv"; // 같은 저장소에 올린 CSV 경로 (예: re
         H.P++; A.P++;
         H.GF+=m.hs; H.GA+=m.as; H.GD=H.GF-H.GA;
         A.GF+=m.as; A.GA+=m.hs; A.GD=A.GF-A.GA;
-        if(m.hs>m.as){ H.W++; A.L++; H.Pts += 1; H.form.push('W'); A.form.push('L'); }
-        else { A.W++; H.L++; A.Pts += 1; A.form.push('W'); H.form.push('L'); }
+        if(m.hs>m.as){ H.W++; A.L++; H.Pts += 2; H.form.push('W'); A.form.push('L'); }
+        else { A.W++; H.L++; A.Pts -= 1; A.form.push('W'); H.form.push('L'); }
         if(H.form.length>5) H.form.shift();
         if(A.form.length>5) A.form.shift();
       });
@@ -151,7 +151,7 @@ const CSV_URL = "results.csv"; // 같은 저장소에 올린 CSV 경로 (예: re
       }
       // 3) 데모 데이터 (백업)
       const header = ["match_id","date","home","away","home_score","away_score"];
-      const rows = [header, ["1","2025-08-20","근근","깡","2","1"], ["2","2025-08-20","다루","디니","3","0"]];
+      const rows = [header, ["1","2025-08-20","근근","깡","2","1"], ["2","2025-08-20","다루","다니","3","0"]];
       return rows;
     }
 
@@ -167,7 +167,7 @@ const CSV_URL = "results.csv"; // 같은 저장소에 올린 CSV 경로 (예: re
       }catch(err){ statusEl.textContent='오류: '+err.message; }
     }
 
-function renderRecent10(container, matches){
+    function renderRecent10(container, matches){
   container.innerHTML = "";
   const done = matches.filter(m=>Number.isFinite(m.hs) && Number.isFinite(m.as));
   done.sort((a,b)=>{
@@ -183,22 +183,25 @@ function renderRecent10(container, matches){
     return;
   }
 
+  const toMD = (dstr)=>{
+    const d = new Date(dstr);
+    if(isNaN(d)) return dstr||"날짜 미정";
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const dd = String(d.getDate()).padStart(2,'0');
+    return `${mm}-${dd}`;
+  };
+
   const grid = el("div", {class:"grid grid-cols-5 gap-2"});
   recent.forEach(m=>{
-    let winner=null, loser=null;
-    if(m.hs > m.as){ winner = m.home; loser = m.away; }
-    else if(m.as > m.hs){ winner = m.away; loser = m.home; }
+    let winner=null;
+    if(m.hs > m.as) winner = m.home; else if(m.as > m.hs) winner = m.away;
+    const homeBold = winner===m.home ? `<strong>${m.home}</strong>` : m.home;
+    const awayBold = winner===m.away ? `<strong>${m.away}</strong>` : m.away;
+    const displayHTML = `${homeBold} ${m.hs}:${m.as} ${awayBold}`;
 
-    const display = `${m.home} ${m.hs}:${m.as} ${m.away}`;
     const cell = el("div", {class:"bg-white shadow rounded p-2 text-xs text-center"},
-      el("div", {class:"text-[11px] text-gray-500"}, m.date||"날짜 미정"),
-      el("div", {class:"mt-1 font-semibold"}, display),
-      winner
-        ? el("div", {class:"mt-1 flex justify-center gap-2"},
-            pill("W", `${winner} 승`),
-            pill("L", `${loser} 패`)
-          )
-        : el("div", {class:"text-[11px] mt-1 text-gray-700"}, "무효")
+      el("div", {class:"text-[11px] text-gray-500"}, toMD(m.date)),
+      el("div", {class:"mt-1 font-semibold", html: displayHTML})
     );
     grid.appendChild(cell);
   });
@@ -218,7 +221,7 @@ function renderRecent10(container, matches){
     <div id="standings"></div>
     <h2 class="text-xl font-semibold mt-8 mb-2">최근 10경기</h2>
     <div id="recent10"></div>
-    <div class="mt-6 text-xs text-gray-500">화이팅입니다.</div>
+    <div class="mt-6 text-xs text-gray-500">데이터 소스: Google Apps Script 웹앱(JSON) 또는 CSV. API_URL에 /exec 주소를 넣으면 자동으로 JSON→CSV 순으로 판별합니다.</div>
   </div>
 </body>
 </html>
