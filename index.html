@@ -167,10 +167,9 @@ const CSV_URL = "results.csv"; // 같은 저장소에 올린 CSV 경로 (예: re
       }catch(err){ statusEl.textContent='오류: '+err.message; }
     }
 
-    function renderRecent10(container, matches){
+function renderRecent10(container, matches){
   container.innerHTML = "";
   const done = matches.filter(m=>Number.isFinite(m.hs) && Number.isFinite(m.as));
-  // 최신순 정렬
   done.sort((a,b)=>{
     const da = new Date(a.date).getTime();
     const db = new Date(b.date).getTime();
@@ -184,16 +183,19 @@ const CSV_URL = "results.csv"; // 같은 저장소에 올린 CSV 경로 (예: re
     return;
   }
 
-  // 2줄 (각 5경기) 그리드
   const grid = el("div", {class:"grid grid-cols-5 gap-2"});
   recent.forEach((m,i)=>{
-    const homeWin = m.hs > m.as;
-    const awayWin = m.as > m.hs;
-    const resultText = homeWin ? "W" : "L";  // 홈팀 기준
-    const display = `${m.home} ${m.hs}:${m.as} ${m.away} (${m.home} ${homeWin ? "승" : "패"})`;
+    let winner=null, loser=null;
+    if(m.hs > m.as){ winner = m.home; loser = m.away; }
+    else if(m.as > m.hs){ winner = m.away; loser = m.home; }
+
+    const display = `${m.home} ${m.hs}:${m.as} ${m.away}`;
+    const resultLine = winner ? `${winner} 승 / ${loser} 패` : "무효";
+
     const cell = el("div", {class:"bg-white shadow rounded p-2 text-xs text-center"},
       el("div", {class:"text-[11px] text-gray-500"}, m.date||"날짜 미정"),
-      el("div", {class:`mt-1 ${homeWin? 'text-green-600 font-semibold':'text-red-600 font-semibold'}`}, display)
+      el("div", {class:"mt-1 font-semibold"}, display),
+      el("div", {class:"text-[11px] mt-1 text-gray-700"}, resultLine)
     );
     grid.appendChild(cell);
   });
