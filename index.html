@@ -3,9 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>또보게 캐슬콤보 대회 17명 풀리그 실시간 결과</title>
+  <title>17명 풀리그 실시간 결과</title>
   <script>
-    const SHEET_CSV_URL = "results.csv"; // 실제 구글 시트 CSV URL 넣기
+    // Google Apps Script 웹앱(JSON) URL
+const API_URL = ""; // 예: https://script.google.com/macros/s/AKfycbx.../exec
+const CSV_URL = "results.csv"; // 같은 저장소에 올린 CSV 경로 (예: results.csv)
     const REFRESH_SEC = 30;
 
     const norm = s => (s||"").toString().trim().toLowerCase();
@@ -52,11 +54,12 @@
       const teams = new Map();
       const ensure = name => {
         if(!teams.has(name)) teams.set(name, {
-          team: name, P:0, W:0, L:0, GF:0, GA:0, GD:0, form: [] });
+          team: name, P:0, W:0, L:0, GF:0, GA:0, GD:0, Pts:0, form: []
+        });
         return teams.get(name);
       };
 
-      const PLAYERS = ["근근","깡","다루","디니","라로","로버트","미정","소금","소나","숑숑","승지","아르테","위나","지명","쿠몬","큰환","하늘"];
+      const PLAYERS = ["근근","깡","다루","다니","라로","로버트","미정","소금","소나","숑숑","승지","아르테","위나","지명","쿠몬","큰환","하늘"];
       PLAYERS.forEach(p=>ensure(p));
 
       const completed = matches.filter(m=>Number.isFinite(m.hs) && Number.isFinite(m.as));
@@ -66,16 +69,18 @@
         H.P++; A.P++;
         H.GF+=m.hs; H.GA+=m.as; H.GD=H.GF-H.GA;
         A.GF+=m.as; A.GA+=m.hs; A.GD=A.GF-A.GA;
-        if(m.hs>m.as){ H.W++; A.L++; H.form.push('W'); A.form.push('L'); }
-        else { A.W++; H.L++; A.form.push('W'); H.form.push('L'); }
+        if(m.hs>m.as){ H.W++; A.L++; H.Pts += 1; H.form.push('W'); A.form.push('L'); }
+        else { A.W++; H.L++; A.Pts += 1; A.form.push('W'); H.form.push('L'); }
         if(H.form.length>5) H.form.shift();
         if(A.form.length>5) A.form.shift();
       });
 
       const arr = Array.from(teams.values());
       arr.sort((a,b)=>{
-        if(b.GD!==a.GD) return b.GD-a.GD;
-        if(b.GF!==a.GF) return b.GF-a.GF;
+        if(b.Pts!==a.Pts) return b.Pts-a.Pts; // 승점 우선
+        if(b.W!==a.W) return b.W-a.W;         // 다음은 승수
+        if(b.GD!==a.GD) return b.GD-a.GD;     // 그 다음 득실
+        if(b.GF!==a.GF) return b.GF-a.GF;     // 그 다음 득점
         return (a.team.localeCompare(b.team,'ko'));
       });
       return arr;
@@ -102,16 +107,18 @@
       container.innerHTML="";
       const table = el("table",{class:"min-w-full border-separate border-spacing-y-2"});
       const thead = el("thead",{}, el("tr",{class:"text-sm text-gray-600"},
-        ["선수","경기","승","패","득실","최근5"].map(h=>el("th",{class:"text-left px-3"},h))));
+        ["순위","선수","경기","승","패","승점","최근5"].map(h=>el("th",{class:"text-left px-3"},h))));
       const tbody = el("tbody");
-      standings.forEach(t=>{
-        const row = el("tr",{class:"bg-white shadow rounded"},
+      standings.forEach((t,i)=>{
+        const highlight = i < 10; // 상위 10명 강조
+        const row = el("tr", {class: highlight?"bg-white shadow rounded font-bold":"bg-white shadow rounded"},
+          el("td",{class:"px-3 py-2"}, i+1),
           el("td",{class:"px-3 py-2"},t.team),
           el("td",{class:"px-3 py-2"},t.P),
           el("td",{class:"px-3 py-2"},t.W),
           el("td",{class:"px-3 py-2"},t.L),
-          el("td",{class:"px-3 py-2"},t.GD),
-          el("td",{class:"px-3 py-2"},...t.form.map((r,i)=>pill(r,`${t.team} 최근 ${i+1}번째 경기: ${r}`)))
+          el("td",{class:"px-3 py-2"},t.Pts),
+          el("td",{class:"px-3 py-2"},...t.form.map((r,i2)=>pill(r,`${t.team} 최근 ${i2+1}번째 경기: ${r}`)))
         );
         tbody.appendChild(row);
       });
@@ -120,15 +127,32 @@
     }
 
     async function loadCSV(){
-      if(!SHEET_CSV_URL){
-        const demo = `match_id,date,home,away,home_score,away_score\n`
-          + `1,2025-08-20,근근,깡,2,1\n`
-          + `2,2025-08-20,다루,디니,3,0\n`;
-        return parseCSV(demo);
+      // 1) API_URL이 있으면 우선 사용(JSON 우선 → CSV 폴백)
+      if (API_URL) {
+        const res = await fetch(API_URL, { cache: 'no-store' });
+        if (!res.ok) throw new Error("API 불러오기 실패: " + res.status);
+        const text = await res.text();
+        try {
+          const data = JSON.parse(text);
+          const header = ["match_id","date","home","away","home_score","away_score"];
+          const rows = [header, ...data.map(obj => header.map(h => obj[h]))];
+          return rows;
+        } catch {
+          // JSON이 아니면 CSV로 가정하여 파싱
+          return parseCSV(text);
+        }
       }
-      const res = await fetch(SHEET_CSV_URL,{cache:'no-store'});
-      const text = await res.text();
-      return parseCSV(text);
+      // 2) CSV_URL이 지정되어 있으면 해당 CSV 사용
+      if (CSV_URL) {
+        const res = await fetch(CSV_URL, { cache: 'no-store' });
+        if (!res.ok) throw new Error("CSV 불러오기 실패: " + res.status);
+        const text = await res.text();
+        return parseCSV(text);
+      }
+      // 3) 데모 데이터 (백업)
+      const header = ["match_id","date","home","away","home_score","away_score"];
+      const rows = [header, ["1","2025-08-20","근근","깡","2","1"], ["2","2025-08-20","다루","다니","3","0"]];
+      return rows;
     }
 
     async function refresh(){
@@ -138,8 +162,34 @@
         const {matches}=parseMatches(rows);
         const standings=computeStandings(matches);
         renderStandings(document.getElementById('standings'),standings);
+        renderRecent10(document.getElementById('recent10'), matches);
         statusEl.textContent=`업데이트: ${new Date().toLocaleString()}`;
       }catch(err){ statusEl.textContent='오류: '+err.message; }
+    }
+
+    function renderRecent10(container, matches){
+      container.innerHTML = "";
+      const done = matches.filter(m=>Number.isFinite(m.hs) && Number.isFinite(m.as));
+      // 최신순 정렬 (date 파싱 가능 시 날짜 기준, 아니면 입력 순으로)
+      done.sort((a,b)=>{
+        const da = new Date(a.date).getTime();
+        const db = new Date(b.date).getTime();
+        if(!isNaN(db-da)) return db-da; // 최근 날짜 우선
+        return 0;
+      });
+      const recent = done.slice(0,10);
+      if(recent.length===0){
+        container.appendChild(el("div", {class:"text-sm text-gray-600"}, "완료된 경기가 없습니다."));
+        return;
+      }
+      const list = el("div", {class:"space-y-2"});
+      recent.forEach(m=>{
+        list.appendChild(el("div", {class:"bg-white shadow rounded p-3"},
+          el("div", {class:"text-xs text-gray-500"}, m.date||"날짜 미정"),
+          el("div", {class:"text-base font-medium mt-1"}, `${m.home} ${m.hs} : ${m.as} ${m.away}`)
+        ));
+      });
+      container.appendChild(list);
     }
 
     document.addEventListener('DOMContentLoaded',()=>{
@@ -153,7 +203,9 @@
     <h1 class="text-2xl font-bold mb-2">17명 풀리그 실시간 결과</h1>
     <div id="status" class="text-sm text-gray-600 mb-4">불러오는 중…</div>
     <div id="standings"></div>
-    <div class="mt-6 text-xs text-gray-500">CSV 헤더: match_id,date,home,away,home_score,away_score. 무승부 입력시 무시됨.</div>
+    <h2 class="text-xl font-semibold mt-8 mb-2">최근 10경기</h2>
+    <div id="recent10"></div>
+    <div class="mt-6 text-xs text-gray-500">데이터 소스: Google Apps Script 웹앱(JSON) 또는 CSV. API_URL에 /exec 주소를 넣으면 자동으로 JSON→CSV 순으로 판별합니다.</div>
   </div>
 </body>
 </html>
