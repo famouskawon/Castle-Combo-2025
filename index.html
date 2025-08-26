@@ -184,18 +184,21 @@ function renderRecent10(container, matches){
   }
 
   const grid = el("div", {class:"grid grid-cols-5 gap-2"});
-  recent.forEach((m,i)=>{
+  recent.forEach(m=>{
     let winner=null, loser=null;
     if(m.hs > m.as){ winner = m.home; loser = m.away; }
     else if(m.as > m.hs){ winner = m.away; loser = m.home; }
 
     const display = `${m.home} ${m.hs}:${m.as} ${m.away}`;
-    const resultLine = winner ? `${winner} 승 / ${loser} 패` : "무효";
-
     const cell = el("div", {class:"bg-white shadow rounded p-2 text-xs text-center"},
       el("div", {class:"text-[11px] text-gray-500"}, m.date||"날짜 미정"),
       el("div", {class:"mt-1 font-semibold"}, display),
-      el("div", {class:"text-[11px] mt-1 text-gray-700"}, resultLine)
+      winner
+        ? el("div", {class:"mt-1 flex justify-center gap-2"},
+            pill("W", `${winner} 승`),
+            pill("L", `${loser} 패`)
+          )
+        : el("div", {class:"text-[11px] mt-1 text-gray-700"}, "무효")
     );
     grid.appendChild(cell);
   });
