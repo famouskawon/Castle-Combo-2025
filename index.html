@@ -168,30 +168,38 @@ const CSV_URL = "results.csv"; // 같은 저장소에 올린 CSV 경로 (예: re
     }
 
     function renderRecent10(container, matches){
-      container.innerHTML = "";
-      const done = matches.filter(m=>Number.isFinite(m.hs) && Number.isFinite(m.as));
-      // 최신순 정렬 (date 파싱 가능 시 날짜 기준, 아니면 입력 순으로)
-      done.sort((a,b)=>{
-        const da = new Date(a.date).getTime();
-        const db = new Date(b.date).getTime();
-        if(!isNaN(db-da)) return db-da; // 최근 날짜 우선
-        return 0;
-      });
-      const recent = done.slice(0,10);
-      if(recent.length===0){
-        container.appendChild(el("div", {class:"text-sm text-gray-600"}, "완료된 경기가 없습니다."));
-        return;
-      }
-      const list = el("div", {class:"space-y-2"});
-      recent.forEach(m=>{
-        list.appendChild(el("div", {class:"bg-white shadow rounded p-3"},
-          el("div", {class:"text-xs text-gray-500"}, m.date||"날짜 미정"),
-          el("div", {class:"text-base font-medium mt-1"}, `${m.home} ${m.hs} : ${m.as} ${m.away}`)
-        ));
-      });
-      container.appendChild(list);
-    }
+  container.innerHTML = "";
+  const done = matches.filter(m=>Number.isFinite(m.hs) && Number.isFinite(m.as));
+  // 최신순 정렬
+  done.sort((a,b)=>{
+    const da = new Date(a.date).getTime();
+    const db = new Date(b.date).getTime();
+    if(!isNaN(db-da)) return db-da;
+    return 0;
+  });
+  const recent = done.slice(0,10);
 
+  if(recent.length===0){
+    container.appendChild(el("div", {class:"text-sm text-gray-600"}, "완료된 경기가 없습니다."));
+    return;
+  }
+
+  // 2줄 (각 5경기) 그리드
+  const grid = el("div", {class:"grid grid-cols-5 gap-2"});
+  recent.forEach((m,i)=>{
+    const homeWin = m.hs > m.as;
+    const awayWin = m.as > m.hs;
+    const resultText = homeWin ? "W" : "L";  // 홈팀 기준
+    const display = `${m.home} ${m.hs}:${m.as} ${m.away} (${m.home} ${homeWin ? "승" : "패"})`;
+    const cell = el("div", {class:"bg-white shadow rounded p-2 text-xs text-center"},
+      el("div", {class:"text-[11px] text-gray-500"}, m.date||"날짜 미정"),
+      el("div", {class:`mt-1 ${homeWin? 'text-green-600 font-semibold':'text-red-600 font-semibold'}`}, display)
+    );
+    grid.appendChild(cell);
+  });
+
+  container.appendChild(grid);
+}
     document.addEventListener('DOMContentLoaded',()=>{
       refresh(); setInterval(refresh,REFRESH_SEC*1000);
     });
