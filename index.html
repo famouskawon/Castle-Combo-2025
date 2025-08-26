@@ -59,7 +59,7 @@ const CSV_URL = "results.csv"; // 같은 저장소에 올린 CSV 경로 (예: re
         return teams.get(name);
       };
 
-      const PLAYERS = ["근근","깡","다루","다니","라로","로버트","미정","소금","소나","숑숑","승지","아르테","위나","지명","쿠몬","큰환","하늘"];
+      const PLAYERS = ["근근","깡","다루","디니","라로","로버트","미정","소금","소나","숑숑","승지","아르테","위나","지명","쿠몬","큰환","하늘"];
       PLAYERS.forEach(p=>ensure(p));
 
       const completed = matches.filter(m=>Number.isFinite(m.hs) && Number.isFinite(m.as));
@@ -151,7 +151,7 @@ const CSV_URL = "results.csv"; // 같은 저장소에 올린 CSV 경로 (예: re
       }
       // 3) 데모 데이터 (백업)
       const header = ["match_id","date","home","away","home_score","away_score"];
-      const rows = [header, ["1","2025-08-20","근근","깡","2","1"], ["2","2025-08-20","다루","다니","3","0"]];
+      const rows = [header, ["1","2025-08-20","근근","깡","2","1"], ["2","2025-08-20","다루","디니","3","0"]];
       return rows;
     }
 
