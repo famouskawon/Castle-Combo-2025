@@ -86,12 +86,35 @@ const CSV_URL = "results.csv"; // 같은 저장소에 올린 CSV 경로 (예: re
       });
 
       const arr = Array.from(teams.values());
-      arr.sort((a,b)=>{
-        if(b.Pts!==a.Pts) return b.Pts-a.Pts; // 승점 우선
-        if(b.W!==a.W) return b.W-a.W;         // 다음은 승수
-        if(b.GD!==a.GD) return b.GD-a.GD;     // 그 다음 득실
-        if(b.GF!==a.GF) return b.GF-a.GF;     // 그 다음 득점
-        return (a.team.localeCompare(b.team,'ko'));
+arr.sort((a,b)=>{
+  if(b.Pts!==a.Pts) return b.Pts-a.Pts;
+  if(b.W!==a.W) return b.W-a.W;
+  if(b.GD!==a.GD) return b.GD-a.GD;
+  if(b.GF!==a.GF) return b.GF-a.GF;
+  return (a.team.localeCompare(b.team,'ko'));
+});
+
+// 동률 처리: 같은 승점이면 같은 순위
+arr.forEach((t,i)=>{
+  if(i===0){
+    t.Rank = 1;
+  } else {
+    const prev = arr[i-1];
+    if(t.Pts===prev.Pts){
+      t.Rank = prev.Rank;
+    } else {
+      t.Rank = i+1;
+    }
+  }
+});
+
+// 동률 순위(competition ranking: 1,1,3 방식)
+      arr.forEach((t,i)=>{
+        if(i===0){ t.Rank = 1; }
+        else {
+          const prev = arr[i-1];
+          t.Rank = (t.Pts === prev.Pts) ? prev.Rank : (i+1);
+        }
       });
       return arr;
     }
@@ -120,9 +143,9 @@ const CSV_URL = "results.csv"; // 같은 저장소에 올린 CSV 경로 (예: re
         ["순위","선수","경기","승","패","승점","최근5"].map(h=>el("th",{class:"text-left px-3"},h))));
       const tbody = el("tbody");
       standings.forEach((t,i)=>{
-        const highlight = i < 10; // 상위 10명 강조
+        const highlight = t.Rank <= 10; // 동률 포함 상위 10위 강조
         const row = el("tr", {class: highlight?"bg-white shadow rounded font-bold":"bg-white shadow rounded"},
-          el("td",{class:"px-3 py-2"}, i+1),
+          el("td",{class:"px-3 py-2"}, t.Rank),
           el("td",{class:"px-3 py-2"},t.team),
           el("td",{class:"px-3 py-2"},t.P),
           el("td",{class:"px-3 py-2"},t.W),
