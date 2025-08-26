@@ -5,31 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>17명 풀리그 실시간 결과</title>
   <script>
-    // =====================
-    // 🔧 CONFIGURATION
-    // =====================
-    // 1) Google Sheets에서 '웹에 게시' → CSV 링크 붙여넣기
-    // 예: const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/.../pub?gid=0&single=true&output=csv";
-    // 아래는 데모용 샘플 데이터(질의파라미터 ?demo=1 사용 시 적용)
-    const SHEET_CSV_URL = ""; // 여기에 실제 CSV URL 입력
-
-    // 자동 새로고침(초)
+    const SHEET_CSV_URL = ""; // 실제 구글 시트 CSV URL 넣기
     const REFRESH_SEC = 30;
 
-    // 승점 규칙 (축구식 기본값)
-    const POINTS = { win: 3, draw: 1, loss: 0 };
-
-    // 정렬 기준: 승점>득실차>득점>상대전적(옵션)>이름
-    const TIEBREAK = { headToHead: true };
-
-    // 팀/선수 이름 정렬 시 대소문자 구분 제거
     const norm = s => (s||"").toString().trim().toLowerCase();
 
-    // =====================
-    // 🧮 CORE LOGIC
-    // =====================
     function parseCSV(text){
-      // 매우 단순한 CSV 파서 (쉼표/따옴표 처리 기본)
       const rows = [];
       let i=0, field="", row=[]; let inQ=false;
       const pushField=()=>{ row.push(field); field=""; };
@@ -44,27 +25,18 @@
           if(c==='"') inQ=true;
           else if(c===',') pushField();
           else if(c==='\n'){ pushField(); pushRow(); }
-          else if(c==='\r'){ /* ignore */ }
+          else if(c==='\r'){ }
           else field+=c;
         }
       }
-      // 마지막 필드/행 처리
       if(field.length || row.length){ pushField(); pushRow(); }
       return rows;
     }
 
     function parseMatches(rows){
-      // 기대 스키마 (헤더 반드시 포함):
-      // match_id,date,home,away,home_score,away_score
-      // 점수 비어있으면 미완료 경기로 간주
       const [header, ...data] = rows.filter(r=>r.length>1);
       if(!header) return { header:[], matches:[] };
       const idx = Object.fromEntries(header.map((h,i)=>[norm(h), i]));
-      const req = ["match_id","date","home","away","home_score","away_score"];
-      const ok = req.every(k=>idx.hasOwnProperty(k));
-      if(!ok) {
-        throw new Error("CSV 헤더가 올바르지 않습니다. 필요한 헤더: " + req.join(", "));
-      }
       const matches = data.map(r=>({
         id: r[idx["match_id"]],
         date: r[idx["date"]],
@@ -80,123 +52,66 @@
       const teams = new Map();
       const ensure = name => {
         if(!teams.has(name)) teams.set(name, {
-          team: name, P:0, W:0, D:0, L:0, GF:0, GA:0, GD:0, Pts:0,
-          form: [], // 최근 5경기 결과
-          playedWith: new Map(), // 상대전적 계산용
-        });
+          team: name, P:0, W:0, L:0, GF:0, GA:0, GD:0, form: [] });
         return teams.get(name);
       };
+
+      const PLAYERS = ["근근","깡","다루","다니","라로","로버트","미정","소금","소나","숑숑","승지","아르테","위나","지명","쿠몬","큰환","하늘"];
+      PLAYERS.forEach(p=>ensure(p));
 
       const completed = matches.filter(m=>Number.isFinite(m.hs) && Number.isFinite(m.as));
       completed.forEach(m=>{
         const H = ensure(m.home), A = ensure(m.away);
+        if(m.hs===m.as){ return; } // 무승부 제외
         H.P++; A.P++;
         H.GF+=m.hs; H.GA+=m.as; H.GD=H.GF-H.GA;
         A.GF+=m.as; A.GA+=m.hs; A.GD=A.GF-A.GA;
-
-        let hr, ar; // result letters
-        if(m.hs>m.as){
-          H.W++; A.L++; H.Pts+=POINTS.win; A.Pts+=POINTS.loss; hr='W'; ar='L';
-        } else if(m.hs<m.as){
-          A.W++; H.L++; A.Pts+=POINTS.win; H.Pts+=POINTS.loss; hr='L'; ar='W';
-        } else {
-          H.D++; A.D++; H.Pts+=POINTS.draw; A.Pts+=POINTS.draw; hr='D'; ar='D';
-        }
-        H.form.push(hr); if(H.form.length>5) H.form.shift();
-        A.form.push(ar); if(A.form.length>5) A.form.shift();
-
-        // 상대전적 집계
-        const keyHA = norm(A.team);
-        const keyAH = norm(H.team);
-        const vsH = H.playedWith.get(keyHA) || { pts:0, gd:0, gf:0 };
-        const vsA = A.playedWith.get(keyAH) || { pts:0, gd:0, gf:0 };
-        if(m.hs>m.as){ vsH.pts+=POINTS.win; vsA.pts+=POINTS.loss; }
-        else if(m.hs<m.as){ vsA.pts+=POINTS.win; vsH.pts+=POINTS.loss; }
-        else { vsH.pts+=POINTS.draw; vsA.pts+=POINTS.draw; }
-        vsH.gd += (m.hs-m.as); vsH.gf += m.hs;
-        vsA.gd += (m.as-m.hs); vsA.gf += m.as;
-        H.playedWith.set(keyHA, vsH);
-        A.playedWith.set(keyAH, vsA);
+        if(m.hs>m.as){ H.W++; A.L++; H.form.push('W'); A.form.push('L'); }
+        else { A.W++; H.L++; A.form.push('W'); H.form.push('L'); }
+        if(H.form.length>5) H.form.shift();
+        if(A.form.length>5) A.form.shift();
       });
 
-      // 정렬
       const arr = Array.from(teams.values());
       arr.sort((a,b)=>{
-        if(b.Pts!==a.Pts) return b.Pts-a.Pts;
         if(b.GD!==a.GD) return b.GD-a.GD;
         if(b.GF!==a.GF) return b.GF-a.GF;
-        if(TIEBREAK.headToHead){
-          const aVsB = a.playedWith.get(norm(b.team));
-          const bVsA = b.playedWith.get(norm(a.team));
-          if(aVsB && bVsA){
-            if(bVsA.pts!==aVsB.pts) return bVsA.pts - aVsB.pts;
-            if(bVsA.gd!==aVsB.gd) return bVsA.gd - aVsB.gd;
-            if(bVsA.gf!==aVsB.gf) return bVsA.gf - aVsB.gf;
-          }
-        }
-        return norm(a.team) < norm(b.team) ? -1 : 1;
+        return (a.team.localeCompare(b.team,'ko'));
       });
-
-      // 순위 부여 (공동순위 허용)
-      let last = null, rank = 0;
-      arr.forEach((t,i)=>{
-        const key = `${t.Pts}|${t.GD}|${t.GF}`;
-        if(last!==key){ rank = i+1; last = key; }
-        t.Rank = rank;
-      });
-
       return arr;
     }
 
     function groupUpcoming(matches){
-      const upcoming = matches.filter(m=>!(Number.isFinite(m.hs) && Number.isFinite(m.as)));
-      // 날짜가 숫자/ISO면 정렬, 아니면 그대로
-      upcoming.sort((a,b)=> (new Date(a.date)) - (new Date(b.date)));
-      return upcoming;
+      return matches.filter(m=>!(Number.isFinite(m.hs) && Number.isFinite(m.as)));
     }
 
-    // =====================
-    // 🖥️  UI RENDERING
-    // =====================
     function el(tag, attrs={}, ...children){
       const e = document.createElement(tag);
       for(const [k,v] of Object.entries(attrs)){
         if(k==="class") e.className = v; else if(k==="html") e.innerHTML = v; else e.setAttribute(k,v);
       }
-      children.flat().forEach(c=>{
-        if(c==null) return;
-        if(typeof c==="string" || typeof c==="number") e.appendChild(document.createTextNode(c));
-        else e.appendChild(c);
-      });
+      children.flat().forEach(c=>{ if(c==null)return; if(typeof c=="string"||typeof c=="number") e.appendChild(document.createTextNode(c)); else e.appendChild(c); });
       return e;
     }
-
-    function pill(text, title){
-      const map = {W:"W", D:"D", L:"L"};
-      const bg = {W:"bg-green-200", D:"bg-gray-200", L:"bg-red-200"}[text] || "bg-gray-100";
-      return el("span", {class:`inline-flex items-center justify-center text-xs ${bg} rounded px-2 py-0.5`, title}, text);
+    function pill(text,title){
+      const bg = {W:"bg-green-200",L:"bg-red-200"}[text]||"bg-gray-100";
+      return el("span",{class:`inline-flex items-center justify-center text-xs ${bg} rounded px-2 py-0.5`,title},text);
     }
 
     function renderStandings(container, standings){
-      container.innerHTML = "";
-      const table = el("table", {class:"min-w-full border-separate border-spacing-y-2"});
-      const thead = el("thead", {}, el("tr", {class:"text-sm text-gray-600"},
-        ["순위","선수","경기","승","무","패","득점","실점","득실","승점","최근5"].map(h=>el("th", {class:"text-left px-3"}, h))
-      ));
+      container.innerHTML="";
+      const table = el("table",{class:"min-w-full border-separate border-spacing-y-2"});
+      const thead = el("thead",{}, el("tr",{class:"text-sm text-gray-600"},
+        ["선수","경기","승","패","득실","최근5"].map(h=>el("th",{class:"text-left px-3"},h))));
       const tbody = el("tbody");
       standings.forEach(t=>{
-        const row = el("tr", {class:"bg-white shadow rounded"},
-          el("td", {class:"px-3 py-2 font-medium"}, t.Rank),
-          el("td", {class:"px-3 py-2"}, t.team),
-          el("td", {class:"px-3 py-2"}, t.P),
-          el("td", {class:"px-3 py-2"}, t.W),
-          el("td", {class:"px-3 py-2"}, t.D),
-          el("td", {class:"px-3 py-2"}, t.L),
-          el("td", {class:"px-3 py-2"}, t.GF),
-          el("td", {class:"px-3 py-2"}, t.GA),
-          el("td", {class:"px-3 py-2"}, t.GD),
-          el("td", {class:"px-3 py-2 font-bold"}, t.Pts),
-          el("td", {class:"px-3 py-2"}, ...t.form.map((r,i)=>pill(r, `${t.team} 최근 ${i+1}번째 경기: ${r}`)))
+        const row = el("tr",{class:"bg-white shadow rounded"},
+          el("td",{class:"px-3 py-2"},t.team),
+          el("td",{class:"px-3 py-2"},t.P),
+          el("td",{class:"px-3 py-2"},t.W),
+          el("td",{class:"px-3 py-2"},t.L),
+          el("td",{class:"px-3 py-2"},t.GD),
+          el("td",{class:"px-3 py-2"},...t.form.map((r,i)=>pill(r,`${t.team} 최근 ${i+1}번째 경기: ${r}`)))
         );
         tbody.appendChild(row);
       });
@@ -204,141 +119,41 @@
       container.appendChild(table);
     }
 
-    function renderUpcoming(container, upcoming){
-      container.innerHTML = "";
-      if(upcoming.length===0){
-        container.appendChild(el("div", {class:"text-sm text-gray-600"}, "예정 경기가 없습니다."));
-        return;
-      }
-      const list = el("div", {class:"grid md:grid-cols-2 gap-3"});
-      upcoming.slice(0, 20).forEach(m=>{
-        list.appendChild(el("div", {class:"bg-white shadow rounded p-3"},
-          el("div", {class:"text-xs text-gray-500"}, m.date || "날짜 미정"),
-          el("div", {class:"text-base font-medium mt-1"}, `${m.home} vs ${m.away}`)
-        ));
-      });
-      container.appendChild(list);
-    }
-
-    function filterStandings(standings, q){
-      if(!q) return standings;
-      const n = norm(q);
-      return standings.filter(t=> norm(t.team).includes(n));
-    }
-
-    // =====================
-    // 🌐 DATA LOADING
-    // =====================
     async function loadCSV(){
-      const url = (new URLSearchParams(location.search).get('demo')) ? null : (SHEET_CSV_URL||null);
-      if(!url){
-        // 데모 데이터 (17명 중 일부 경기만 기입)
+      if(!SHEET_CSV_URL){
         const demo = `match_id,date,home,away,home_score,away_score\n`
-          + `1,2025-08-20,Alex,Bora,2,1\n`
-          + `2,2025-08-20,Choi,Daun,1,1\n`
-          + `3,2025-08-20,Eunji,Alex,0,3\n`
-          + `4,2025-08-21,Bora,Choi,2,2\n`
-          + `5,2025-08-21,Daun,Eunji,1,0\n`
-          + `6,2025-08-22,Alex,Choi, , \n`
-          + `7,2025-08-22,Bora,Eunji, , \n`
-          + `8,2025-08-22,Daun,Faith, , \n`;
+          + `1,2025-08-20,근근,깡,2,1\n`
+          + `2,2025-08-20,다루,다니,3,0\n`;
         return parseCSV(demo);
       }
-      const res = await fetch(url, {cache:'no-store'});
-      if(!res.ok) throw new Error("CSV 불러오기 실패: " + res.status);
+      const res = await fetch(SHEET_CSV_URL,{cache:'no-store'});
       const text = await res.text();
       return parseCSV(text);
     }
 
     async function refresh(){
-      const statusEl = document.getElementById('status');
+      const statusEl=document.getElementById('status');
       try{
-        const rows = await loadCSV();
-        const {matches} = parseMatches(rows);
-        const standings = computeStandings(matches);
-        const upcoming = groupUpcoming(matches);
-
-        const q = document.getElementById('search').value;
-        renderStandings(document.getElementById('standings'), filterStandings(standings, q));
-        renderUpcoming(document.getElementById('upcoming'), upcoming);
-        const now = new Date();
-        statusEl.textContent = `자동 업데이트 중 • 마지막 새로고침: ${now.toLocaleString()} (매 ${REFRESH_SEC}초)`;
-      } catch(err){
-        statusEl.textContent = '오류: ' + err.message;
-        console.error(err);
-      }
+        const rows=await loadCSV();
+        const {matches}=parseMatches(rows);
+        const standings=computeStandings(matches);
+        renderStandings(document.getElementById('standings'),standings);
+        statusEl.textContent=`업데이트: ${new Date().toLocaleString()}`;
+      }catch(err){ statusEl.textContent='오류: '+err.message; }
     }
 
-    function scheduleAuto(){
-      setInterval(refresh, REFRESH_SEC*1000);
-    }
-
-    // =====================
-    // 🌓 THEME TOGGLE
-    // =====================
-    function toggleTheme(){
-      document.documentElement.classList.toggle('dark');
-      localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
-    }
-
-    function initTheme(){
-      const saved = localStorage.getItem('theme');
-      if(saved==='dark') document.documentElement.classList.add('dark');
-    }
-
-    // =====================
-    // 🚀 INIT
-    // =====================
-    document.addEventListener('DOMContentLoaded', ()=>{
-      initTheme();
-      document.getElementById('search').addEventListener('input', ()=>refresh());
-      document.getElementById('themeBtn').addEventListener('click', toggleTheme);
-      refresh();
-      scheduleAuto();
+    document.addEventListener('DOMContentLoaded',()=>{
+      refresh(); setInterval(refresh,REFRESH_SEC*1000);
     });
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    :root{ color-scheme: light dark; }
-    .dark body{ background:#0b1220; color:#e6edf3; }
-    .dark .bg-white{ background:#0f172a !important; }
-    .dark .text-gray-600{ color:#94a3b8 !important; }
-    .dark .text-gray-500{ color:#94a3b8 !important; }
-  </style>
 </head>
 <body class="min-h-screen bg-slate-50">
-  <div class="max-w-6xl mx-auto p-4 md:p-6">
-    <header class="flex items-center gap-3 mb-4">
-      <h1 class="text-2xl md:text-3xl font-bold">17명 풀리그 실시간 결과</h1>
-      <button id="themeBtn" class="ml-auto text-sm border px-3 py-1 rounded">라이트/다크</button>
-    </header>
-
-    <section class="mb-4 bg-white dark:bg-slate-900 rounded p-3 shadow">
-      <div class="flex flex-col md:flex-row md:items-center gap-3">
-        <div class="text-sm" id="status">데이터 불러오는 중…</div>
-        <div class="md:ml-auto flex items-center gap-2">
-          <input id="search" placeholder="선수 검색" class="border rounded px-3 py-1 text-sm bg-transparent" />
-          <a class="text-xs underline" href="?demo=1">데모 보기</a>
-        </div>
-      </div>
-      <div class="text-xs text-gray-600 mt-2">CSV 헤더는 <code>match_id,date,home,away,home_score,away_score</code> 이어야 합니다. 점수가 비어 있으면 예정 경기로 처리됩니다.</div>
-    </section>
-
-    <main class="grid md:grid-cols-3 gap-6">
-      <section class="md:col-span-2">
-        <h2 class="text-xl font-semibold mb-2">순위표</h2>
-        <div id="standings" class="overflow-x-auto"></div>
-      </section>
-      <aside>
-        <h2 class="text-xl font-semibold mb-2">예정 경기</h2>
-        <div id="upcoming"></div>
-      </aside>
-    </main>
-
-    <footer class="mt-10 text-xs text-gray-600">
-      <p>• Google Sheets에서 결과를 입력하면 이 페이지가 자동으로 집계/정렬하여 보여줍니다. (기본 30초마다 새로고침)</p>
-      <p>• 동률 시 승점→득실차→득점→상대전적 순으로 정렬합니다. 필요 시 스크립트 상단의 TIEBREAK 설정을 수정하세요.</p>
-    </footer>
+  <div class="max-w-4xl mx-auto p-4">
+    <h1 class="text-2xl font-bold mb-2">17명 풀리그 실시간 결과</h1>
+    <div id="status" class="text-sm text-gray-600 mb-4">불러오는 중…</div>
+    <div id="standings"></div>
+    <div class="mt-6 text-xs text-gray-500">CSV 헤더: match_id,date,home,away,home_score,away_score. 무승부 입력시 무시됨.</div>
   </div>
 </body>
 </html>
